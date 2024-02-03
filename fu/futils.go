@@ -1,7 +1,9 @@
-package fu
+package main
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 const (
@@ -79,6 +81,23 @@ func GetDirectoryObjectList(path string, includeHidden bool) ([]os.DirEntry, err
 	}
 	return filteredFiles, nil
 
+}
+
+func GetFilesListRecursively(path string) []os.FileInfo {
+	var files []os.FileInfo
+	filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && strings.HasPrefix(info.Name(), ".") {
+			return filepath.SkipDir
+		}
+		if !info.IsDir() && !strings.HasPrefix(info.Name(), ".") {
+			files = append(files, info)
+		}
+		return nil
+	})
+	return files
 }
 
 func GetFileInfo(f os.DirEntry) *FileInfo {
