@@ -2,6 +2,7 @@ package fu
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,22 +28,49 @@ const (
 	HiddenFileType = "hidden"
 )
 
-type FileSizeType int64
+type FileDirSize int64
+type FileInfo struct {
+	fs.FileInfo
+}
 
-func (f FileSizeType) KB() float64 {
+func (f *FileInfo) IsHidden() bool {
+	return strings.HasPrefix(f.Name(), ".")
+}
+func (f *FileInfo) FullPath() string {
+	path, err := getFullPath(f.FileInfo)
+	if err != nil {
+		return f.Name()
+	}
+	return path
+}
+func (f *FileInfo) IsDir() bool {
+	return f.FileInfo.IsDir()
+}
+
+func (f *FileInfo) Type() string {
+	if f.IsDir() {
+		return DirType
+	}
+	if f.IsHidden() {
+		return HiddenFileType
+	}
+	return FileType
+}
+
+func (f *FileInfo) ModTime() time.Time {
+	return f.FileInfo.ModTime()
+}
+
+func (f *FileInfo) Size() FileDirSize {
+	return FileDirSize(f.FileInfo.Size())
+}
+
+func (f FileDirSize) KB() float64 {
 	return float64(f) / 1024
 }
 
-func (f FileSizeType) MB() float64 {
+func (f FileDirSize) MB() float64 {
 	return float64(f) / (1024 * 1024)
-}
-
-type FileInfo struct {
-	Name     string
-	FullPath string
-	IsDir    bool
-	ModTime  time.Time
-	Size     FileSizeType
 }
 
 // bytesToMegabytes converts bytes to megabytes.
@@ -63,7 +91,7 @@ func bytesToKilobytes(bytes int64) float64 {
 
 // String returns the full path of the file information.
 func (f *FileInfo) String() string {
-	return fmt.Sprintf("Name: %s, FullPath: %s, IsDir: %t, ModTime: %s, Size: %.2f MB", f.Name, f.FullPath, f.IsDir, f.ModTime.String(), f.Size.MB())
+	return fmt.Sprintf("Name: %s, FullPath: %s, IsDir: %t, ModTime: %s, Size: %.2f MB", f.Name(), f.FullPath(), f.IsDir(), f.ModTime().String(), f.Size().MB())
 }
 
 // getFullPath returns the full path of the file.
@@ -172,15 +200,39 @@ func getFilesListRecursively(rootPath string, includeHidden, includeDirs bool) [
 // entry os.DirEntry
 // *FileInfo
 func GetFileInfo(entry os.FileInfo) *FileInfo {
-	fullPath, err := getFullPath(entry)
+	return &FileInfo{entry}
+}
+
+func GetDirectorySize(path string) (FileDirSize, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return FileDirSize(size), err
+}
+
+func ListAllDirectories(path string) ([]os.FileInfo, error) {
+	files, err := os.ReadDir(path)
 	if err != nil {
-		fullPath = entry.Name()
+		return nil, err
 	}
-	return &FileInfo{
-		Name:     entry.Name(),
-		IsDir:    entry.IsDir(),
-		ModTime:  entry.ModTime(),
-		Size:     FileSizeType(entry.Size()),
-		FullPath: fullPath,
+
+	var dirs []os.FileInfo
+
+	for _, dirEntry := range files {
+		if !dirEntry.IsDir() {
+			continue
+		}
+
+		f, err := dirEntry.Info()
+		if err != nil {
+			continue
+		}
+		dirs = append(dirs, f)
 	}
+
+	return dirs, nil
 }
