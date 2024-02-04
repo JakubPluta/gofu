@@ -3,10 +3,15 @@ package main
 import (
 	"fmt"
 
-	file_utils "github.com/JakubPluta/gofu/fu/file_utils"
+	fu "github.com/JakubPluta/gofu/fu"
 )
 
 func main() {
-	f, _ := file_utils.GetFilesListRecursively(".")
-	fmt.Println(f)
+	f, _ := fu.ListDirectory(".", false, true)
+	for _, file := range f {
+		fmt.Println(file.Name())
+		info := fu.GetFileInfo(file)
+		fmt.Println(info)
+	}
+
 }

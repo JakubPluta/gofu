@@ -1,9 +1,11 @@
-package main
+package fu
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -25,11 +27,56 @@ const (
 	HiddenFileType = "hidden"
 )
 
+type FileSizeType int64
+
+func (f FileSizeType) KB() float64 {
+	return float64(f) / 1024
+}
+
+func (f FileSizeType) MB() float64 {
+	return float64(f) / (1024 * 1024)
+}
+
 type FileInfo struct {
-	Name    string
-	IsDir   bool
-	ModTime string
-	Size    int64
+	Name     string
+	FullPath string
+	IsDir    bool
+	ModTime  time.Time
+	Size     FileSizeType
+}
+
+// bytesToMegabytes converts bytes to megabytes.
+//
+// bytes int64
+// float64
+func bytesToMegabytes(bytes int64) float64 {
+	return float64(bytes) / (1024 * 1024)
+}
+
+// bytesToKilobytes calculates the number of kilobytes from the given bytes.
+//
+// bytes int64
+// float64
+func bytesToKilobytes(bytes int64) float64 {
+	return float64(bytes) / 1024
+}
+
+// String returns the full path of the file information.
+func (f *FileInfo) String() string {
+	return fmt.Sprintf("Name: %s, FullPath: %s, IsDir: %t, ModTime: %s, Size: %.2f MB", f.Name, f.FullPath, f.IsDir, f.ModTime.String(), f.Size.MB())
+}
+
+// getFullPath returns the full path of the file.
+//
+// Parameter: fileInfo os.FileInfo
+// Return type: string, error
+func getFullPath(fileInfo os.FileInfo) (string, error) {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	fullPath := filepath.Join(workingDir, fileInfo.Name())
+	return fullPath, nil
 }
 
 // GetCurrentWorkingDirectory returns the current working directory.
@@ -53,6 +100,19 @@ func GetHomeDirectory() (string, error) {
 	return dir, nil
 }
 
+// filterFile filters the file based on the given criteria.
+// Parameters: file os.FileInfo, includeHidden bool, includeDirs bool.
+// Returns os.FileInfo.
+func filterFile(file os.FileInfo, includeHidden, includeDirs bool) os.FileInfo {
+	if !includeHidden && strings.HasPrefix(file.Name(), ".") {
+		return nil
+	}
+	if !includeDirs && file.IsDir() {
+		return nil
+	}
+	return file
+}
+
 // listFiles retrieves a list of files in the specified path, with options to include hidden files and directories.
 //
 // Parameters:
@@ -65,51 +125,62 @@ func GetHomeDirectory() (string, error) {
 //
 //	[]os.DirEntry - a slice of os.DirEntry representing the filtered files
 //	error - an error, if any, encountered during the operation
-func listFiles(path string, includeHidden, includeDirs bool) ([]os.DirEntry, error) {
+func ListDirectory(path string, includeHidden, includeDirs bool) ([]os.FileInfo, error) {
 	files, err := os.ReadDir(path)
 	if err != nil {
 		return nil, err
 	}
 
-	var filteredFiles []os.DirEntry
+	var filteredFiles []os.FileInfo
 
-	for _, file := range files {
-		if !includeHidden && strings.HasPrefix(file.Name(), ".") {
+	for _, dirEntry := range files {
+		f, err := dirEntry.Info()
+		if err != nil {
 			continue
 		}
-		if !includeDirs && file.IsDir() {
+		file := filterFile(f, includeHidden, includeDirs)
+		if file == nil {
 			continue
 		}
+
 		filteredFiles = append(filteredFiles, file)
 	}
 
 	return filteredFiles, nil
 }
 
-func GetFilesListRecursively(path string, includeHidden, includeDirs bool) []os.DirEntry {
-	var searchResults []os.DirEntry
+// GetFilesListRecursively retrieves a list of files recursively from the specified root path.
+//
+// rootPath string, includeHidden bool, includeDirs bool. []os.FileInfo.
+// TODO: improve it
+func getFilesListRecursively(rootPath string, includeHidden, includeDirs bool) []os.FileInfo {
+	var fileList []os.FileInfo
 
-	filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
-		files, err := listFiles(path, includeHidden, includeDirs)
-		if err != nil {
-			return err
+	filepath.Walk(rootPath, func(path string, info os.FileInfo, err error) error {
+		file := filterFile(info, includeHidden, includeDirs)
+		if file == nil {
+			return nil
 		}
-		searchResults = append(searchResults, files...)
+		fileList = append(fileList, file)
 		return nil
 	})
-	return searchResults
+	return fileList
 }
 
-func GetFileInfo(f os.DirEntry) *FileInfo {
-	file, err := f.Info()
+// GetFileInfo returns a FileInfo struct based on the provided os.DirEntry.
+//
+// entry os.DirEntry
+// *FileInfo
+func GetFileInfo(entry os.FileInfo) *FileInfo {
+	fullPath, err := getFullPath(entry)
 	if err != nil {
-		return nil
+		fullPath = entry.Name()
 	}
-	fileInfo := FileInfo{
-		Name:    file.Name(),
-		IsDir:   file.IsDir(),
-		ModTime: file.ModTime().String(),
-		Size:    file.Size(),
+	return &FileInfo{
+		Name:     entry.Name(),
+		IsDir:    entry.IsDir(),
+		ModTime:  entry.ModTime(),
+		Size:     FileSizeType(entry.Size()),
+		FullPath: fullPath,
 	}
-	return &fileInfo
 }
