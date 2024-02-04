@@ -53,51 +53,51 @@ func GetHomeDirectory() (string, error) {
 	return dir, nil
 }
 
-// GetDirectoryObjectList retrieves the list of directory objects at the specified path.
+// listFiles retrieves a list of files in the specified path, with options to include hidden files and directories.
 //
 // Parameters:
 //
-//	path string - the path of the directory
+//	path string - the directory path to list files from
 //	includeHidden bool - flag to include hidden files
+//	includeDirs bool - flag to include directories
 //
 // Return type(s):
 //
-//	[]os.DirEntry - list of directory objects
-//	error - error if any
-func GetDirectoryObjectList(path string, includeHidden bool) ([]os.DirEntry, error) {
+//	[]os.DirEntry - a slice of os.DirEntry representing the filtered files
+//	error - an error, if any, encountered during the operation
+func listFiles(path string, includeHidden, includeDirs bool) ([]os.DirEntry, error) {
 	files, err := os.ReadDir(path)
 	if err != nil {
 		return nil, err
 	}
-	if includeHidden {
-		return files, nil
-	}
 
 	var filteredFiles []os.DirEntry
-	for _, file := range files {
-		if file.Name()[0] == '.' {
-			filteredFiles = append(filteredFiles, file)
-		}
-	}
-	return filteredFiles, nil
 
+	for _, file := range files {
+		if !includeHidden && strings.HasPrefix(file.Name(), ".") {
+			continue
+		}
+		if !includeDirs && file.IsDir() {
+			continue
+		}
+		filteredFiles = append(filteredFiles, file)
+	}
+
+	return filteredFiles, nil
 }
 
-func GetFilesListRecursively(path string) []os.FileInfo {
-	var files []os.FileInfo
+func GetFilesListRecursively(path string, includeHidden, includeDirs bool) []os.DirEntry {
+	var searchResults []os.DirEntry
+
 	filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		files, err := listFiles(path, includeHidden, includeDirs)
 		if err != nil {
 			return err
 		}
-		if info.IsDir() && strings.HasPrefix(info.Name(), ".") {
-			return filepath.SkipDir
-		}
-		if !info.IsDir() && !strings.HasPrefix(info.Name(), ".") {
-			files = append(files, info)
-		}
+		searchResults = append(searchResults, files...)
 		return nil
 	})
-	return files
+	return searchResults
 }
 
 func GetFileInfo(f os.DirEntry) *FileInfo {
