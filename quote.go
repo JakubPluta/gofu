@@ -7,12 +7,12 @@ import (
 )
 
 type OHLC struct {
-	Date   time.Time
-	Open   float64
-	High   float64
-	Low    float64
-	Close  float64
-	Volume float64
+	Date   time.Time `json:"date"`
+	Open   float64   `json:"open"`
+	High   float64   `json:"high"`
+	Low    float64   `json:"low"`
+	Close  float64   `json:"close"`
+	Volume float64   `json:"volume"`
 }
 
 type Quotes []OHLC
@@ -29,7 +29,7 @@ func (q Quotes) String() string {
 	}
 	return s
 }
-func ParseQuotes(data [][]string) Quotes {
+func ParseQuoteFromCSV(data [][]string) Quotes {
 	quotes := Quotes{}
 	for _, line := range data[1:] {
 		ohlc := OHLC{}
@@ -44,6 +44,17 @@ func ParseQuotes(data [][]string) Quotes {
 	return quotes
 }
 
-func ParseQuotesFromJSON(data map[string]interface{}) Quotes {
-
+func ParseQuoteFromJSON(data map[string]interface{}) Quotes {
+	quotes := Quotes{}
+	for _, line := range data["results"].([]interface{}) {
+		ohlc := OHLC{}
+		ohlc.Date, _ = time.Parse("2006-01-02", line.(map[string]interface{})["date"].(string))
+		ohlc.Open, _ = strconv.ParseFloat(line.(map[string]interface{})["open"].(string), 64)
+		ohlc.High, _ = strconv.ParseFloat(line.(map[string]interface{})["high"].(string), 64)
+		ohlc.Low, _ = strconv.ParseFloat(line.(map[string]interface{})["low"].(string), 64)
+		ohlc.Close, _ = strconv.ParseFloat(line.(map[string]interface{})["close"].(string), 64)
+		ohlc.Volume, _ = strconv.ParseFloat(line.(map[string]interface{})["volume"].(string), 64)
+		quotes = append(quotes, ohlc)
+	}
+	return quotes
 }
