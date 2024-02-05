@@ -2,66 +2,116 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
 
-const yfinanceQuotesUrl = `https://query2.finance.yahoo.com/v8/finance/chart/%s`
-const qParams = "" //`?range=%s&interval=%s`
-
-type QueryParams struct {
-	Symbol   string
-	Interval Interval
-	Period   Period
-}
-
-func (y QueryParams) String() string {
-	return fmt.Sprintf("%s,%s,%s", y.Symbol, y.Interval, y.Period)
-}
+const yfinanceQuotesUrl = `https://query2.finance.yahoo.com/v8/finance/chart/%s?interval=%s&range=%s`
 
 // Params
 
 type Interval string
 type Period string
 
-const (
-	TF1m  Interval = "1m"
-	TF2m  Interval = "2m"
-	TF5m  Interval = "5m"
-	TF15m Interval = "15m"
-	TF30m Interval = "30m"
-	TF60m Interval = "60m"
-	TF90m Interval = "90m"
-	TF1h  Interval = "1h"
-	TF1d  Interval = "1d"
-	TF5d  Interval = "5d"
-	TF1wk Interval = "1wk"
-	TF1mo Interval = "1mo"
-	TF3mo Interval = "3mo"
-)
+func (i Interval) String() string {
+	return string(i)
+}
 
-const (
-	TD1d  Period = "1d"
-	TD5d  Period = "5d"
-	TD7d  Period = "7d"
-	TD1mo Period = "1mo"
-	TD3mo Period = "3mo"
-	TD6mo Period = "6mo"
-	TD1y  Period = "1y"
-	TD2y  Period = "2y"
-	TD5y  Period = "5y"
-	TD10y Period = "10y"
-	TDytd Period = "ytd"
-	TDmax Period = "max"
-)
+func (p Period) String() string {
+	return string(p)
+}
+
+// Contains checks if the given element is present in the array of Intervals.
+//
+// arr []Interval - the array of Intervals to search
+// str Interval - the Interval to search for
+// bool - true if the Interval is found, false otherwise
+func isValidInterval[T comparable](arr []T, str T) bool {
+	for _, a := range arr {
+		if a == str {
+			return true
+		}
+	}
+	return false
+}
+
+func (p Period) toDays() (string, error) {
+	period := p.String()
+	if strings.HasSuffix(period, "d") {
+		return period, nil
+	}
+	if strings.HasSuffix(period, "m") || strings.HasSuffix(period, "h") || p == "max" {
+		return "", errors.New("cannot convert minutes/hours to days")
+	}
+	if strings.HasSuffix(period, "mo") {
+		// convert string to slice
+		months := strings.Split(period, "mo")
+		numMonths, err := strconv.Atoi(months[0])
+		if err != nil {
+			return "", err
+		}
+		return strconv.Itoa(numMonths * 30), nil
+
+	}
+	if strings.HasSuffix(period, "y") {
+		// convert string to slice
+		years := strings.Split(period, "y")
+		numYears, err := strconv.Atoi(years[0])
+		if err != nil {
+			return "", err
+		}
+		return strconv.Itoa(numYears * 365), nil
+	}
+
+	return period, nil
+}
+
+func isValidPeriodForInterval(interval, period string) bool {
+	if period == "max" {
+		return true
+	}
+
+	p := Period(period)
+	days, err := p.toDays()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if days == "" {
+		return false
+	}
+
+	daysSlice := strings.Split(days, "d")
+	dayNum, err := strconv.Atoi(daysSlice[0])
+	if err != nil {
+		log.Fatal(err)
+	}
+	if interval == "1m" && dayNum > 7 {
+		return false
+	}
+	if (interval == "2m" || interval == "5m" || interval == "15m" || interval == "30m" || interval == "90m") && dayNum > 60 {
+		return false
+	}
+
+	if (interval == "60m" || interval == "1h") && dayNum > 730 {
+		return false
+	}
+
+	return true
+}
 
 type YFResponse struct {
 	Chart struct {
 		Result []struct {
+			Error struct {
+				Code        string `json:"code`
+				Description string `json:"description"`
+			} `json:"error"`
 			Meta struct {
 				Symbol string `json:"symbol"`
 			}
@@ -78,7 +128,7 @@ type YFResponse struct {
 	} `json:"chart"`
 }
 
-type fullYFResponse struct {
+type FullYFResponse struct {
 	Chart struct {
 		Result []struct {
 			Meta struct {
@@ -139,38 +189,39 @@ type fullYFResponse struct {
 	} `json:"chart"`
 }
 
-// GetYahooFinanceQuotesData retrieves Yahoo Finance quotes data.
-//
-// symbol string, interval Interval, period Period.
-// YFResponse.
 func GetYahooFinanceQuotesData(symbol string, interval Interval, period Period) YFResponse {
+	var availableIntervals = []Interval{"1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"}
 	var response YFResponse
+
+	if !isValidInterval(availableIntervals, interval) {
+		log.Printf("Invalid interval: %s. Available intervals: %v. Setting default interval: %s", interval, availableIntervals, "1d")
+		interval = "1d"
+	}
 
 	client := http.Client{
 		Timeout: 10 * time.Second,
 	}
-	//qp := fmt.Sprintf(qParams, interval, period)
-	resp, err := client.Get(fmt.Sprintf(yfinanceQuotesUrl, strings.ToUpper(symbol)))
+
+	resp, err := client.Get(fmt.Sprintf(yfinanceQuotesUrl, strings.ToUpper(symbol), interval, period))
 	if err != nil {
-		log.Printf("Error: %s", err)
+		log.Printf("Error retrieving Yahoo Finance quotes data: %s", err)
 		return response
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		log.Printf("Error: status code %d", resp.StatusCode)
-		return response
-	}
-
 	responseData, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("Error: %s", err)
+		log.Printf("Error reading response data: %s", err)
+		return response
+	}
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Error: status code %d - %s, body: %s", resp.StatusCode, resp.Status, string(responseData))
 		return response
 	}
 
 	err = json.Unmarshal(responseData, &response)
 	if err != nil {
-		log.Printf("Error: %s", err)
+		log.Printf("Error unmarshalling response data: %s", err)
 		return response
 	}
 

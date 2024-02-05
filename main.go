@@ -7,7 +7,7 @@ func main() {
 	// quotes := ParseQuoteFromCSV(data)
 	// fmt.Println(quotes)
 
-	data := GetYahooFinanceQuotesData("META", TF1h, "1d")
+	data := GetYahooFinanceQuotesData("META", "1m", "1y")
 	_ = data
 	fmt.Println(data)
 	//fmt.Println(b)
