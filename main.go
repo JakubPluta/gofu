@@ -1,22 +1,15 @@
 package main
 
-import (
-	"fmt"
-
-	fu "github.com/JakubPluta/gofu/fu"
-)
+import "fmt"
 
 func main() {
-	f, _ := fu.ListDirectory(".", false, true)
-	for _, file := range f {
-		fmt.Println(file.Name())
+	// data := ReadCSV("data/example.csv")
+	// quotes := ParseQuoteFromCSV(data)
+	// fmt.Println(quotes)
 
-	}
-	sze, _ := fu.GetDirectorySize(".")
-	fmt.Println(sze.KB())
+	data := GetYahooFinanceQuotesData("META", TF1h, "1d")
+	_ = data
+	fmt.Println(data)
+	//fmt.Println(b)
 
-	k, _ := fu.ListAllDirectories("../")
-	for _, file := range k {
-		fmt.Println(file)
-	}
 }
