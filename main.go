@@ -7,9 +7,10 @@ func main() {
 	// quotes := ParseQuoteFromCSV(data)
 	// fmt.Println(quotes)
 
-	data := GetYahooFinanceQuotesData("META", "1m", "1y")
+	data := RetrieveDailyOHLCData("META", "30d")
 	_ = data
-	fmt.Println(data)
-	//fmt.Println(b)
+	for _, ohlc := range data {
+		fmt.Println(ohlc)
+	}
 
 }
