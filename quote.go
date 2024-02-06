@@ -2,9 +2,17 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 )
+
+type Quotes struct {
+	Date   []time.Time `json:"date"`
+	Open   []float64   `json:"open"`
+	High   []float64   `json:"high"`
+	Low    []float64   `json:"low"`
+	Close  []float64   `json:"close"`
+	Volume []float64   `json:"volume"`
+}
 
 type OHLC struct {
 	Date   time.Time `json:"date"`
@@ -15,46 +23,62 @@ type OHLC struct {
 	Volume float64   `json:"volume"`
 }
 
-type Quotes []OHLC
+type OHLCS []OHLC
 
 func (o OHLC) String() string {
 	return fmt.Sprintf("%s,%f,%f,%f,%f,%f", o.Date, o.Open, o.High, o.Low, o.Close, o.Volume)
 }
 
-func (q Quotes) String() string {
-	s := ""
-	s += "Date,Open,High,Low,Close,Volume\n"
-	for _, ohlc := range q {
-		s += ohlc.String() + "\n"
+func (q Quotes) ToOHLC() []OHLC {
+	var ohlc []OHLC
+	for i := range q.Date {
+		ohlc = append(ohlc, OHLC{
+			Date:   q.Date[i],
+			Open:   q.Open[i],
+			High:   q.High[i],
+			Low:    q.Low[i],
+			Close:  q.Close[i],
+			Volume: q.Volume[i],
+		})
 	}
-	return s
+	return ohlc
 }
-func ParseQuoteFromCSV(data [][]string) Quotes {
-	quotes := Quotes{}
-	for _, line := range data[1:] {
-		ohlc := OHLC{}
-		ohlc.Date, _ = time.Parse("2006-01-02", line[0])
-		ohlc.Open, _ = strconv.ParseFloat(line[1], 64)
-		ohlc.High, _ = strconv.ParseFloat(line[2], 64)
-		ohlc.Low, _ = strconv.ParseFloat(line[3], 64)
-		ohlc.Close, _ = strconv.ParseFloat(line[4], 64)
-		ohlc.Volume, _ = strconv.ParseFloat(line[5], 64)
-		quotes = append(quotes, ohlc)
+
+func (o OHLCS) ToQuotes() Quotes {
+	var quotes Quotes
+	for i := range o {
+		quotes.Date = append(quotes.Date, o[i].Date)
+		quotes.Open = append(quotes.Open, o[i].Open)
+		quotes.High = append(quotes.High, o[i].High)
+		quotes.Low = append(quotes.Low, o[i].Low)
+		quotes.Close = append(quotes.Close, o[i].Close)
+		quotes.Volume = append(quotes.Volume, o[i].Volume)
 	}
 	return quotes
 }
 
-func ParseQuoteFromJSON(data map[string]interface{}) Quotes {
-	quotes := Quotes{}
-	for _, line := range data["results"].([]interface{}) {
-		ohlc := OHLC{}
-		ohlc.Date, _ = time.Parse("2006-01-02", line.(map[string]interface{})["date"].(string))
-		ohlc.Open, _ = strconv.ParseFloat(line.(map[string]interface{})["open"].(string), 64)
-		ohlc.High, _ = strconv.ParseFloat(line.(map[string]interface{})["high"].(string), 64)
-		ohlc.Low, _ = strconv.ParseFloat(line.(map[string]interface{})["low"].(string), 64)
-		ohlc.Close, _ = strconv.ParseFloat(line.(map[string]interface{})["close"].(string), 64)
-		ohlc.Volume, _ = strconv.ParseFloat(line.(map[string]interface{})["volume"].(string), 64)
-		quotes = append(quotes, ohlc)
+func (o OHLCS) String() string {
+	s := ""
+	s += "Date,Open,High,Low,Close,Volume\n"
+	for _, ohlc := range o {
+		s += ohlc.String() + "\n"
 	}
-	return quotes
+	return s
+}
+
+func (o OHLCS) Len() int {
+	return len(o)
+}
+
+func (o Quotes) Len() int {
+	return len(o.Date)
+}
+
+func (o Quotes) String() string {
+	s := ""
+	s += "Date,Open,High,Low,Close,Volume\n"
+	for _, ohlc := range o.ToOHLC() {
+		s += ohlc.String() + "\n"
+	}
+	return s
 }

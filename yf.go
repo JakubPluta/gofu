@@ -70,7 +70,7 @@ type YFResponse struct {
 // symbol: string - the symbol for the stock or asset
 // period: string - the time period for the data
 // []OHLC - an array of OHLC (open, high, low, close) data points
-func RetrieveDailyOHLCData(symbol string, period string) []OHLC {
+func RetrieveDailyOHLCData(symbol string, period string) OHLCS {
 	resp, err := getYahooFinanceQuotesData(symbol, period, "1d")
 	if err != nil {
 		log.Fatal(err)
